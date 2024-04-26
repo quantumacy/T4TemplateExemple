@@ -1,0 +1,132 @@
+﻿/// © Quantumacy SASU 2024
+/// Author: Étienne Alby
+/// BSD 3-Clause Licence (see attached LICENCE.TXT)
+///
+/// 1 to N sample. This sample is using the additional capacities provided by the library T4.FileManager
+/// (https://databinding-gmbh.github.io/T4.FileManager.VisualStudio/)
+/// The code is reading values defined inside the TemplateData namespace in the TemplateData assemblies.
+/// The assembly is loaded from the folder where the project was built. The line referencing it must be
+/// updated if the folder is moved. The assembly must also be setup to be built before this template is
+/// generated otherwise you would get out of sync data (referencing the previous build)
+/// 
+/// The mechanism for outputting text is to write the text you want to see in the final file and insert logic with the <,>,# characters
+/// You can also write directly in the file from the logic by using the "Write" function.
+<#@ template debug="false" hostspecific="true" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="netstandard" #>
+<#@ assembly name="$(SolutionDir)\TemplateData\bin\$(Configuration)\netstandard2.0\TemplateData.dll" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="TemplateData" #>
+<#@ output extension=".txt" #>
+<#@ include file="$(TargetDir)\T4.FileManager.VisualStudio.ttinclude" #>
+<#
+
+// We Store the list of API as a List of string
+IEnumerable<string> apiList = Enum.GetValues(typeof(API)).Cast<API>().Select(value => Enum.GetName(typeof(API), value));
+
+var fileManager = T4FileManager.Create(this).EnableAutoIndent();
+
+// we need to specify the folder because we are outputing outside of the current project.
+// Remark : Path.GetFullPath() use the executable path as a root, which in this context is the path of the .sln file
+string rootFolder = Path.GetFullPath("GeneratedProject/Generated/");
+string rootProject = "GeneratedProject";
+
+// we iterate on the list of API we extracted from the assembly
+foreach(string api in apiList)
+{
+    // Start of Header generation:
+    fileManager.StartNewFile(api + "Buffers.h", rootProject, rootFolder);
+#>
+#pragma once
+
+#include <vector>
+#include "../Helper/MathHelper.h"
+#include "../Generated/EnumDefinitions.h"
+<#
+// we want to include the helper only when we deal with Vulkan API
+if (api == "Vulkan")
+{#>
+#include "../Helper/VulkanHelper.h"
+<#} // #>
+
+namespace renderer
+{
+    void DoSomething<#=api#>(const std::vector<math::vec3f>& buffer, BufferTypes types);
+
+    // This class is a wrapper for the <#=api#> API.
+    class <#=api#>Wrapper
+    {
+        public:
+<#foreach (Buffers enumBufferValue in Enum.GetValues(typeof(Buffers)).Cast<Buffers>())
+{
+string enumBufferName = Enum.GetName(typeof(Buffers), enumBufferValue);#>
+        void Set<#Write(enumBufferName);#>Buffers(const std::vector<math::vec3f>& buffer)
+        {
+<# if (api == "Vulkan")
+{#>
+        SpecialCaseCodeForVulkanBuffers(buffer);
+<#}#>
+        DoSomething<#=api#>(buffer, <#=enumBufferName#>);
+    }
+
+<#} // foreach Buffers#>
+    };
+}
+<#
+}
+
+    // Start of enum generation:
+    fileManager.StartNewFile("EnumDefinitions.h", rootProject, rootFolder);
+#>
+#pragma once
+
+    // Buffer types
+
+    enum BufferTypes
+    {
+<#foreach (Buffers enumBufferValue in Enum.GetValues(typeof(Buffers)).Cast<Buffers>())
+{
+    string enumBufferName = Enum.GetName(typeof(Buffers), enumBufferValue);
+    Write(String.Format("\t{0},\r\n", enumBufferName));
+}#>
+    };
+<#
+
+foreach(string api in apiList)
+{
+    // Start of cpp generation:
+    fileManager.StartNewFile(api + "BufferAction.cpp", rootProject, rootFolder);
+#>
+#include <vector>
+#include "../Helper/MathHelper.h"
+#include "../Generated/EnumDefinitions.h"
+
+namespace renderer
+{
+void DoSomething<#=api#>(const std::vector<math::vec3f>& buffer, BufferTypes type)
+{
+    switch (type)
+    {
+<#
+    foreach (Buffers enumBufferValue in Enum.GetValues(typeof(Buffers)).Cast<Buffers>())
+    {
+        string enumBufferName = Enum.GetName(typeof(Buffers), enumBufferValue);
+#>
+    case <#= enumBufferName #>:
+    {
+        // Do something <#=enumBufferName#> related for <#=api#>!;
+        break;
+    }
+<#
+    }
+#>} // switch
+} // function
+} //namespace
+<#
+}
+
+    // This call is done only once and will generate all the files added with "StartNewFile"
+    fileManager.Process();
+#>

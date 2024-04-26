@@ -1,0 +1,52 @@
+﻿<#
+/// © Quantumacy SASU 2024
+/// Author: Étienne Alby
+/// BSD Licence (see attached LICENCE.TXT)
+///
+/// 1 to 1 sample. This sample is using the native capacities of T4 mixing the template with C# code
+/// The code is reading values defined inside the TemplateData namespace in the TemplateData assemblies.
+/// The assembly is loaded from the folder where the project was built. The line referencing it must be
+/// updated if the folder is moved. The assembly must also be setup to be built before this template is
+/// generated otherwise you would get out of sync data (referencing the previous build)
+/// 
+/// The mechanism for outputting text is to write the text you want to see in the final file and insert logic with the <,>,# characters
+/// You can also write directly in the file from the logic by using the "Write" function or the shortcut "="
+#>
+<#@ template debug="true" hostspecific="false" language="C#" #>
+<#@ assembly name="netstandard" #>
+<#@ assembly name="System" #>
+<#@ assembly name="System.Runtime" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="$(SolutionDir)\TemplateData\bin\$(Configuration)\netstandard2.0\TemplateData.dll" #>
+<#@ import namespace="TemplateData" #>
+<#@ import namespace="System.Linq" #>
+<#@ output extension=".cs" #>
+<#
+// We are gathering the enum definitions from the API enum from the definitions of the enum in the
+// TemplateData assembly with reflection
+foreach (API enumApiValue in Enum.GetValues(typeof(API)).Cast<API>())
+{
+  // We store the name of the enum value extracted from the enum
+  string enumApiName = Enum.GetName(typeof(API), enumApiValue);
+  int counter = 0;
+
+  // note that even if the current block of logic is closed we still remain in the confine of the original scope
+  // opened by the { under foreach (and we close that scope at the last line of the template). All local defined
+  // variables are still accessible to the rest of the template
+#>
+
+// Definition of the buffers for the <#=enumApiName#> API
+enum <#=enumApiName#>Buffers
+{
+    None = 0,
+<#foreach (Buffers enumBufferValue in Enum.GetValues(typeof(Buffers)).Cast<Buffers>())
+{
+    // None could be setup the same way with counter at 0 but it's for illustrating that you can 
+    // alter the logic as you wish directly inside the template outside of the programming logic
+    string enumBufferName = Enum.GetName(typeof(Buffers), enumBufferValue);
+    Write(String.Format("    {0} = 1 << {1},\r\n", enumBufferName, ++counter));#>
+<#} // foreach Buffers#>
+    Count = <#Write(String.Format("{0}", counter + 1)); // here you are free to implement the count as you wish
+    #>,
+};
+<#}#>
